@@ -270,7 +270,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE ImageHandle,
             bp->hdr.ramdisk_size = (UINT32)InitrdSize;
             bp->hdr.ext_ramdisk_image = (UINT32)((UINT64)InitrdAddr >> 32);
             bp->hdr.ext_ramdisk_size = (UINT32)((UINT64)InitrdSize >> 32);
-            Print(L"initrd ok\n\r");
+            // Print(L"initrd ok\n\r");
         }
 
         InitrdFile->Close(InitrdFile);
