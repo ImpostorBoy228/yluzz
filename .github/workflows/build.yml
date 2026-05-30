@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -23,3 +26,22 @@ jobs:
         with:
           name: BOOTX64
           path: BOOTX64.EFI
+
+      - name: Create or update release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG="continuous"
+          RELEASE_URL=$(gh api repos/${{ github.repository }}/releases \
+            --jq '.[] | select(.tag_name == "'"$TAG"'") | .url' 2>/dev/null || true)
+
+          if [ -z "$RELEASE_URL" ]; then
+            RELEASE_URL=$(gh release create "$TAG" \
+              --title "Continuous build (${{ github.sha }})" \
+              --notes "Automated build from commit ${{ github.sha }}" \
+              --prerelease \
+              --target "${{ github.sha }}" | head -1)
+          else
+            gh release upload "$TAG" BOOTX64.EFI --clobber 2>/dev/null || true
+          fi
