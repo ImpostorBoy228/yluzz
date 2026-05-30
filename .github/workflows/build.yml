@@ -32,6 +32,6 @@ jobs:
 
           gh release create "$TAG" \
             BOOTX64.EFI \
-            --title "Continuous build (${{ github.sha }})" \
-            --notes "Automated build from commit ${{ github.sha }}" \
+            --title "CI so sigma (${{ github.sha }})" \
+            --notes "automated build fr fr ${{ github.sha }}" \
             --target "${{ github.sha }}"
