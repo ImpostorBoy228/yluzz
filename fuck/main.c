@@ -58,8 +58,10 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE ImageHandle,
         (VOID**)&LoadedImage
     );
 
-    if (EFI_ERROR(Status))
+    if (EFI_ERROR(Status)) {
+        Print(L"HandleProtocol(LoadedImage) failed: %r\n\r", Status);
         goto naxyi;
+    }
 
     Status = uefi_call_wrapper(
         SystemTable->BootServices->HandleProtocol,
@@ -69,8 +71,10 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE ImageHandle,
         (VOID**)&Fs
     );
 
-    if (EFI_ERROR(Status))
+    if (EFI_ERROR(Status)) {
+        Print(L"HandleProtocol(SimpleFs) failed: %r\n\r", Status);
         goto naxyi;
+    }
 
     Status = uefi_call_wrapper(
         Fs->OpenVolume,
@@ -79,8 +83,10 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE ImageHandle,
         &RootDir
     );
 
-    if (EFI_ERROR(Status))
+    if (EFI_ERROR(Status)) {
+        Print(L"OpenVolume failed: %r\n\r", Status);
         goto naxyi;
+    }
 
     Status = uefi_call_wrapper(
         RootDir->Open,
@@ -92,8 +98,10 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE ImageHandle,
         0
     );
 
-    if (EFI_ERROR(Status))
+    if (EFI_ERROR(Status)) {
+        Print(L"Open kernel %s failed: %r\n\r", CFG_KERNEL_PATH, Status);
         goto naxyi;
+    }
 
     EFI_FILE_INFO *FileInfo = NULL;
     UINTN InfoSize = 0;
@@ -146,10 +154,14 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE ImageHandle,
             &KernelAddress
         );
     }
-    if (EFI_ERROR(Status))
+    if (EFI_ERROR(Status)) {
+        Print(L"AllocatePages for kernel failed: %r\n\r", Status);
         goto naxyi;
-    if (KernelAddress < 0x100000)
+    }
+    if (KernelAddress < 0x100000) {
+        Print(L"Kernel address too low\n\r");
         goto naxyi;
+    }
 
     KernelBuffer = (VOID*)(UINTN)KernelAddress;
 
@@ -163,14 +175,18 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE ImageHandle,
 
     KernelFile->Close(KernelFile);
 
-    if (EFI_ERROR(Status))
+    if (EFI_ERROR(Status)) {
+        Print(L"Read kernel failed: %r\n\r", Status);
         goto naxyi;
+    }
 
     linux_setup_header *Setup =
         (linux_setup_header*)((UINT8*)KernelBuffer + 0x1f1);
 
-    if (Setup->header != 0x53726448)
+    if (Setup->header != 0x53726448) {
+        Print(L"Bad kernel magic\n\r");
         goto naxyi;
+    }
 
     UINTN setup_sects = Setup->setup_sects;
     if (setup_sects == 0)
@@ -201,8 +217,10 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE ImageHandle,
         );
     }
 
-    if (EFI_ERROR(Status))
+    if (EFI_ERROR(Status)) {
+        Print(L"AllocatePages for boot_params failed: %r\n\r", Status);
         goto naxyi;
+    }
 
     boot_params *bp = (boot_params*)(UINTN)BpAddr;
 
@@ -268,12 +286,16 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE ImageHandle,
             uefi_call_wrapper(InitrdFile->Read, 3, InitrdFile, &InitrdSize, (VOID*)(UINTN)InitrdAddr);
             bp->hdr.ramdisk_image = (UINT32)InitrdAddr;
             bp->hdr.ramdisk_size = (UINT32)InitrdSize;
-            bp->hdr.ext_ramdisk_image = (UINT32)((UINT64)InitrdAddr >> 32);
-            bp->hdr.ext_ramdisk_size = (UINT32)((UINT64)InitrdSize >> 32);
-            // Print(L"initrd ok\n\r");
+            bp->ext_ramdisk_image = (UINT32)((UINT64)InitrdAddr >> 32);
+            bp->ext_ramdisk_size = (UINT32)((UINT64)InitrdSize >> 32);
+            Print(L"initrd loaded\n\r");
+        } else {
+            Print(L"Initrd alloc failed: %r\n\r", Status);
         }
 
         InitrdFile->Close(InitrdFile);
+    } else {
+        Print(L"Open initrd %s failed: %r\n\r", CFG_INITRD_PATH, Status);
     }
 
     UINTN MapKey;
@@ -290,6 +312,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE ImageHandle,
     );
 
     MapSize += DescSize * 2;
+    UINTN BuffSize = MapSize;
 
     EFI_MEMORY_DESCRIPTOR *MemMap =
         AllocatePool(MapSize);
@@ -302,8 +325,10 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE ImageHandle,
         &DescVer
     );
 
-    if (EFI_ERROR(Status))
+    if (EFI_ERROR(Status)) {
+        Print(L"GetMemoryMap failed: %r\n\r", Status);
         goto naxyi;
+    }
 
     bp->efi.efi_loader_signature = 0x41544F4D;
     bp->efi.efi_systab = (UINT32)(UINTN)SystemTable;
@@ -334,6 +359,8 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE ImageHandle,
             if (!EFI_ERROR(Status))
                 break;
 
+            MapSize = BuffSize;
+
             Status = SystemTable->BootServices->GetMemoryMap(
                 &MapSize,
                 MemMap,
@@ -342,15 +369,21 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE ImageHandle,
                 &DescVer
             );
 
-            if (EFI_ERROR(Status))
+            if (EFI_ERROR(Status)) {
+                Print(L"GetMemoryMap retry failed: %r\n\r", Status);
                 goto naxyi;
+            }
 
             fill_e820(bp, MemMap, MapSize, DescSize);
         }
     }
 
-    if (!bp || !entry || entry < 0x100000)
+    if (!bp || !entry || entry < 0x100000) {
+        Print(L"Invalid entry point\n\r");
         goto naxyi;
+    }
+
+    Print(L"boot ok\n\r");
 
     __asm__ volatile (
         "jmp *%0\n"

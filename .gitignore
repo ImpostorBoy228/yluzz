@@ -1,3 +1,4 @@
 *.EFI
 *.elf
 *.o
+fuck/conf.h
