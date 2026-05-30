@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 permissions:
   contents: write
@@ -37,11 +37,11 @@ jobs:
             --jq '.[] | select(.tag_name == "'"$TAG"'") | .url' 2>/dev/null || true)
 
           if [ -z "$RELEASE_URL" ]; then
-            RELEASE_URL=$(gh release create "$TAG" \
+            gh release create "$TAG" \
               --title "Continuous build (${{ github.sha }})" \
               --notes "Automated build from commit ${{ github.sha }}" \
               --prerelease \
-              --target "${{ github.sha }}" | head -1)
+              --target "${{ github.sha }}"
           else
             gh release upload "$TAG" BOOTX64.EFI --clobber 2>/dev/null || true
           fi
