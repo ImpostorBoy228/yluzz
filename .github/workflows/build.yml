@@ -21,27 +21,17 @@ jobs:
       - name: Build
         run: make
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: BOOTX64
-          path: BOOTX64.EFI
-
       - name: Create or update release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
           TAG="continuous"
-          RELEASE_URL=$(gh api repos/${{ github.repository }}/releases \
-            --jq '.[] | select(.tag_name == "'"$TAG"'") | .url' 2>/dev/null || true)
+          gh release delete "$TAG" -y 2>/dev/null || true
+          git push --delete origin "$TAG" 2>/dev/null || true
 
-          if [ -z "$RELEASE_URL" ]; then
-            gh release create "$TAG" \
-              --title "Continuous build (${{ github.sha }})" \
-              --notes "Automated build from commit ${{ github.sha }}" \
-              --prerelease \
-              --target "${{ github.sha }}"
-          else
-            gh release upload "$TAG" BOOTX64.EFI --clobber 2>/dev/null || true
-          fi
+          gh release create "$TAG" \
+            BOOTX64.EFI \
+            --title "Continuous build (${{ github.sha }})" \
+            --notes "Automated build from commit ${{ github.sha }}" \
+            --target "${{ github.sha }}"
